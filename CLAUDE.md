@@ -1,29 +1,14 @@
-# json-benchmark
+# JSON Benchmark Web Tool
 
-Benchmarks Python's stdlib `json` module against `ujson` (UltraJSON) for serialization and deserialization across realistic data shapes.
+## Architecture
+- **Backend**: FastAPI serving a REST API and the frontend.
+- **Frontend**: Vanilla CSS/JS dark-themed UI.
+- **Comparison**: `json` (stdlib) vs `ujson` (UltraJSON).
 
-## Setup
+## Commands
+- **Start Server**: `./.venv/bin/python3 main.py`
+- **Port**: 8000
 
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-```
-
-## Run benchmark
-
-```bash
-python benchmark.py
-```
-
-## Run tests
-
-```bash
-python -m pytest tests/
-```
-
-## Project structure
-
-- `benchmark.py` — main benchmark script (`generate_datasets`, `benchmark`, `main`)
-- `requirements.txt` — `ujson` dependency
-- `tests/test_benchmark.py` — unit tests for dataset generation and timing logic
+## Documentation
+- Use `showboat` to record benchmark sessions and API interactions.
+- Demos should capture both the backend output and example API calls.
