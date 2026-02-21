@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JSON vs ujson Benchmark</title>
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --card-bg: #1e293b;
+            --text-color: #f8fafc;
+            --accent-color: #38bdf8;
+            --success-color: #4ade80;
+            --border-color: #334155;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 2rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .container {
+            max-width: 900px;
+            width: 100%;
+        }
+
+        header {
+            margin-bottom: 2rem;
+            text-align: center;
+        }
+
+        header h1 {
+            color: var(--accent-color);
+            margin-bottom: 0.5rem;
+        }
+
+        .card {
+            background-color: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 0.75rem;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+
+        textarea {
+            width: 100%;
+            height: 200px;
+            background-color: #020617;
+            color: #94a3b8;
+            border: 1px solid var(--border-color);
+            border-radius: 0.5rem;
+            padding: 1rem;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+            font-size: 0.875rem;
+            resize: vertical;
+            box-sizing: border-box;
+        }
+
+        .controls {
+            display: flex;
+            gap: 1rem;
+            margin-top: 1rem;
+            align-items: center;
+        }
+
+        input[type="number"] {
+            background-color: #020617;
+            color: var(--text-color);
+            border: 1px solid var(--border-color);
+            border-radius: 0.4rem;
+            padding: 0.5rem;
+            width: 100px;
+        }
+
+        button {
+            background-color: var(--accent-color);
+            color: #0f172a;
+            border: none;
+            border-radius: 0.4rem;
+            padding: 0.6rem 1.2rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+
+        button:hover {
+            opacity: 0.9;
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .results-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+        }
+
+        .result-card {
+            text-align: center;
+            padding: 1.5rem;
+        }
+
+        .speedup-badge {
+            display: inline-block;
+            background-color: rgba(74, 222, 128, 0.1);
+            color: var(--success-color);
+            padding: 0.25rem 0.75rem;
+            border-radius: 9999px;
+            font-weight: bold;
+            font-size: 1.25rem;
+            margin-top: 0.5rem;
+        }
+
+        .time-compare {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 1rem;
+            font-size: 0.875rem;
+            color: #94a3b8;
+        }
+
+        .error {
+            color: #f87171;
+            background-color: rgba(248, 113, 113, 0.1);
+            padding: 1rem;
+            border-radius: 0.5rem;
+            margin-top: 1rem;
+            display: none;
+        }
+
+        #loading {
+            display: none;
+            margin-left: 1rem;
+            font-size: 0.875rem;
+            color: var(--accent-color);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>JSON vs ujson Benchmark Tool</h1>
+            <p>Paste your JSON payload below to compare performance.</p>
+        </header>
+
+        <div class="card">
+            <textarea id="jsonInput" placeholder='{"example": "paste your JSON here"}'></textarea>
+            <div class="controls">
+                <label for="iterations">Iterations:</label>
+                <input type="number" id="iterations" value="1000" min="1" max="10000">
+                <button id="runBtn">Run Benchmark</button>
+                <span id="loading">Benchmarking...</span>
+            </div>
+            <div id="errorMessage" class="error"></div>
+        </div>
+
+        <div id="results" style="display: none;">
+            <div class="results-grid">
+                <div class="card result-card">
+                    <h3>Serialization (dumps)</h3>
+                    <div id="dumpsSpeedup" class="speedup-badge"></div>
+                    <div class="time-compare">
+                        <span>json: <strong id="jsonDumpsTime"></strong>s</span>
+                        <span>ujson: <strong id="ujsonDumpsTime"></strong>s</span>
+                    </div>
+                </div>
+                <div class="card result-card">
+                    <h3>Deserialization (loads)</h3>
+                    <div id="loadsSpeedup" class="speedup-badge"></div>
+                    <div class="time-compare">
+                        <span>json: <strong id="jsonLoadsTime"></strong>s</span>
+                        <span>ujson: <strong id="ujsonLoadsTime"></strong>s</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const runBtn = document.getElementById('runBtn');
+        const jsonInput = document.getElementById('jsonInput');
+        const iterationsInput = document.getElementById('iterations');
+        const resultsDiv = document.getElementById('results');
+        const errorDiv = document.getElementById('errorMessage');
+        const loadingSpan = document.getElementById('loading');
+
+        runBtn.addEventListener('click', async () => {
+            const rawJson = jsonInput.value.trim();
+            const iterations = parseInt(iterationsInput.value);
+
+            errorDiv.style.display = 'none';
+            resultsDiv.style.display = 'none';
+
+            if (!rawJson) {
+                showError("Please enter a JSON payload.");
+                return;
+            }
+
+            let payload;
+            try {
+                payload = JSON.parse(rawJson);
+            } catch (e) {
+                showError("Invalid JSON payload: " + e.message);
+                return;
+            }
+
+            runBtn.disabled = true;
+            loadingSpan.style.display = 'inline';
+
+            try {
+                const response = await fetch('/benchmark', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ payload, iterations })
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.detail || "Benchmark failed");
+                }
+
+                displayResults(data.results);
+            } catch (e) {
+                showError(e.message);
+            } finally {
+                runBtn.disabled = false;
+                loadingSpan.style.display = 'none';
+            }
+        });
+
+        function showError(msg) {
+            errorDiv.textContent = msg;
+            errorDiv.style.display = 'block';
+        }
+
+        function displayResults(res) {
+            document.getElementById('jsonDumpsTime').textContent = res.dumps.json;
+            document.getElementById('ujsonDumpsTime').textContent = res.dumps.ujson;
+            document.getElementById('dumpsSpeedup').textContent = `${res.dumps.speedup}x Faster`;
+
+            document.getElementById('jsonLoadsTime').textContent = res.loads.json;
+            document.getElementById('ujsonLoadsTime').textContent = res.loads.ujson;
+            document.getElementById('loadsSpeedup').textContent = `${res.loads.speedup}x Faster`;
+
+            resultsDiv.style.display = 'block';
+        }
+
+        // Set default value if empty
+        if (!jsonInput.value) {
+            jsonInput.value = JSON.stringify({
+                "id": 1,
+                "name": "JSON Performance Test",
+                "nested": {
+                    "data": [1, 2, 3, 4, 5],
+                    "active": true
+                },
+                "tags": ["bench", "fastapi", "ujson"]
+            }, null, 2);
+        }
+    </script>
+</body>
+</html>
